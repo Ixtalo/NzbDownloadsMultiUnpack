@@ -1,6 +1,7 @@
 # NzbDownloadsMultiUnpack
 
-Unpacks multiple Usenet NZB downloads using the password stored in the filename, e.g. "foobar {{password}}".
+Unpacks multiple Usenet NZB downloads using the password stored in 
+the file/folder name, e.g. ".../foobar {{password}}/somearchive.rar".
 
 ## Requirements
 

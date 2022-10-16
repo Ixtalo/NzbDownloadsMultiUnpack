@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """multiunpackrecursive.py - Unpacks multiple RAR archives with passwords in file/folder name".
 
-Unpacks multiple Usenet NZB downloads using the password
-stored in the file or folder name, e.g. "foobar {{password}}".
+Unpacks multiple Usenet NZB downloads using the password stored in 
+the file/folder name, e.g. ".../foobar {{password}}/somearchive.rar".
 
 Usage:
   multiunpackrecursive.py [options] <directory>
