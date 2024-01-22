@@ -1,6 +1,15 @@
+# -*- coding: utf-8 -*-
+"""Unit tests."""
+
+# pylint: disable=missing-class-docstring,missing-function-docstring
+
+from datetime import datetime
 from pathlib import Path
 import pytest
-from multiunpackrecursive import ArchiverRar, Archiver7z, _construct_quoted, main, _is_ms_windows
+from nzbdownloadsmultiunpack import multiunpackrecursive
+from nzbdownloadsmultiunpack.multiunpackrecursive import \
+    ArchiverRar, Archiver7z, _construct_quoted, main, \
+    __version__, __updated__
 
 FILENAMES = [
     "volume1.part1.rar",
@@ -62,15 +71,15 @@ class TestArchiverRar:
         instance = ArchiverRar()
         # input is relative path
         assert instance.build_rm_command(Path("xyz.rar")) == \
-               f'rm "{Path("xyz.rar").resolve()}"'
+            f'rm -fv "{Path("xyz.rar").resolve()}" "{Path("xyz.par2").resolve()}"'
         assert instance.build_rm_command(Path("xyz.part1.rar")) == \
-               f'rm "{Path("xyz").resolve()}".part*.rar'
+            f'rm -fv "{Path("xyz").resolve()}".part*.rar "{Path("xyz.par2").resolve()}"'
 
         # input is absolute
         assert instance.build_rm_command(Path("xyz.rar").resolve()) == \
-               f'rm "{Path("xyz.rar").resolve()}"'
+            f'rm -fv "{Path("xyz.rar").resolve()}" "{Path("xyz.par2").resolve()}"'
         assert instance.build_rm_command(Path("xyz.part1.rar").resolve()) == \
-               f'rm "{Path("xyz").resolve()}".part*.rar'
+            f'rm -fv "{Path("xyz").resolve()}".part*.rar "{Path("xyz.par2").resolve()}"'
 
         # no .rar
         with pytest.raises(AssertionError):
@@ -99,15 +108,15 @@ class TestArchiver7z:
         instance = Archiver7z()
         # input is relative path
         assert instance.build_rm_command(Path("xyz.7z")) == \
-               f'rm "{Path("xyz").resolve()}".7z*'
+            f'rm -fv "{Path("xyz").resolve()}".7z* "{Path("xyz.par2").resolve()}"'
         assert instance.build_rm_command(Path("xyz.7z.001")) == \
-               f'rm "{Path("xyz").resolve()}".7z*'
+            f'rm -fv "{Path("xyz").resolve()}".7z* "{Path("xyz.par2").resolve()}"'
 
         # input is absolute path
         assert instance.build_rm_command(Path("xyz.7z").resolve()) == \
-               f'rm "{Path("xyz").resolve()}".7z*'
+            f'rm -fv "{Path("xyz").resolve()}".7z* "{Path("xyz.par2").resolve()}"'
         assert instance.build_rm_command(Path("xyz.7z.001").resolve()) == \
-               f'rm "{Path("xyz").resolve()}".7z*'
+            f'rm -fv "{Path("xyz").resolve()}".7z* "{Path("xyz.par2").resolve()}"'
 
         # no .rar
         with pytest.raises(AssertionError):
@@ -123,28 +132,33 @@ def test_main(monkeypatch, capsys):
     """Test the main() method by monkeypatching sys.argv and capturing STDOUT,
     STDERR and logging output."""
     # overwrite/monkeypatch sys.argv
-    monkeypatch.setattr("sys.argv", ("foo", "../example_data/",))
+    monkeypatch.setattr("sys.argv", ("foo", "./testdata/",))
     # do action
     main()
     # check
     captured = capsys.readouterr()
     assert captured.err == ""
-    # pushd tests && python ../video_info.py ./testdata/ 2>/dev/null
     lines = captured.out.splitlines()
-    assert len(lines) == 4
-    assert lines[0].startswith('unrar x -o- -p"foobardir" "/')
-    assert lines[0].endswith('example_data/rar_example.dir.{{foobardir}}/rand.indir".part*.rar')
-    assert 'example_data/rar_example.dir.{{foobardir}}/" && rm ' in lines[0]
+    assert len(lines) == 7
+    assert "sleep" not in captured.out  # too small for cooldown sleep
+    assert "../" not in captured.out    # all paths must be absolute
+    # first 2 lines are metadata
+    now = datetime.now().isoformat()
+    assert lines[0].startswith(f"# created by NzbDownloadsMultiUnpack {__version__} ({__updated__}) at {now[:20]}")
+    assert lines[1] == "# 2 entries"
+    # third and following lines then contain the actual commands block
+    assert lines[2] == '# -- 1. --------------------------------------------------'
+    assert lines[3].startswith('unrar x -o- -p"foobardir" "/')
+    assert 'testdata/rar_example.dir.{{foobardir}}/rand.indir".part*.rar' in lines[3]
+    assert 'testdata/rar_example.dir.{{foobardir}}/rand.indir.par2"' in lines[3]
+    assert 'testdata/rar_example.dir.{{foobardir}}/" && rm ' in lines[3]
     assert "sleep" not in lines[0]  # too small for cooldown sleep
     assert "../" not in lines[0]    # all paths must be absolute
-    assert lines[1] == '#  ------------------------------------------------------------'
-    assert lines[2].startswith('7z x -aos -o"/')
-    assert lines[2].endswith('example_data/7z_example.dir.{{foobardir}}/rand.indir".7z*')
-    assert 'example_data/7z_example.dir.{{foobardir}}/rand.indir.7z.001" && rm' in lines[2]
-    assert "sleep" not in lines[2]  # too small for cooldown sleep
-    assert "../" not in lines[2]    # all paths must be absolute
-    assert lines[3] == '#  ------------------------------------------------------------'
-
+    assert lines[4] == '# -- 2. --------------------------------------------------'
+    assert lines[5].startswith('7z x -aos -o"/')
+    assert 'testdata/7z_example.dir.{{foobardir}}/rand.indir".7z*' in lines[5]
+    assert 'testdata/7z_example.dir.{{foobardir}}/rand.indir.par2"' in lines[5]
+    assert 'testdata/7z_example.dir.{{foobardir}}/rand.indir.7z.001" && rm' in lines[5]
 
 
 # https://docs.pytest.org/en/latest/how-to/capture-stdout-stderr.html#accessing-captured-output-from-a-test-function
@@ -152,26 +166,33 @@ def test_main_win32(monkeypatch, capsys):
     """Test the main() method by monkeypatching sys.argv and capturing STDOUT,
     STDERR and logging output."""
     # simulate win32
-    monkeypatch.setattr("multiunpackrecursive._is_ms_windows", lambda: True)
+    monkeypatch.setattr(multiunpackrecursive, "_is_ms_windows", lambda: True)
     # overwrite/monkeypatch sys.argv
-    monkeypatch.setattr("sys.argv", ("foo", "../example_data/",))
+    monkeypatch.setattr("sys.argv", ("foo", "./testdata/",))
     # do action
     main()
     # check
     captured = capsys.readouterr()
     assert captured.err == ""
-    # pushd tests && python ../video_info.py ./testdata/ 2>/dev/null
     lines = captured.out.splitlines()
-    assert len(lines) == 4
-    assert lines[0].startswith('7z x -aos -o"/')
-    assert lines[0].endswith('example_data/rar_example.dir.{{foobardir}}/rand.indir".part*.rar')
-    assert 'example_data/rar_example.dir.{{foobardir}}/rand.indir.part1.rar" && del /q "/' in lines[0]
-    assert "sleep" not in lines[0]  # too small for cooldown sleep
-    assert "../" not in lines[0]    # all paths must be absolute
-    assert lines[1] == 'REM  ------------------------------------------------------------'
-    assert lines[2].startswith('7z x -aos -o"/')
-    assert lines[2].endswith('example_data/7z_example.dir.{{foobardir}}/rand.indir".7z*')
-    assert 'example_data/7z_example.dir.{{foobardir}}/rand.indir.7z.001" && del /q "/' in lines[2]
-    assert "sleep" not in lines[2]  # too small for cooldown sleep
-    assert "../" not in lines[2]    # all paths must be absolute
-    assert lines[3] == 'REM  ------------------------------------------------------------'
+    assert len(lines) == 9
+    assert "sleep" not in captured.out  # too small for cooldown sleep
+    assert "../" not in captured.out    # all paths must be absolute
+    # first 2 lines are metadata
+    now = datetime.now().isoformat()
+    assert lines[0].startswith(f"REM created by NzbDownloadsMultiUnpack {__version__} ({__updated__}) at {now[:20]}")
+    assert lines[1] == "REM 2 entries"
+    assert lines[2] == "chcp 1252"
+    assert lines[3] == "REM --------------------------------------------------"
+    # third and following lines then contain the actual commands block
+    assert lines[4] == 'REM -- 1. --------------------------------------------------'
+    # third and following lines then contain the actual commands
+    assert lines[5].startswith('7z x -aos -o"/')
+    assert 'testdata/rar_example.dir.{{foobardir}}/rand.indir".part*.rar' in lines[5]
+    assert 'testdata/rar_example.dir.{{foobardir}}/rand.indir.par2"' in lines[5]
+    assert 'testdata/rar_example.dir.{{foobardir}}/rand.indir.part1.rar" && del /q "/' in lines[5]
+    assert lines[6] == 'REM -- 2. --------------------------------------------------'
+    assert lines[7].startswith('7z x -aos -o"/')
+    assert 'testdata/7z_example.dir.{{foobardir}}/rand.indir".7z*' in lines[7]
+    assert 'testdata/7z_example.dir.{{foobardir}}/rand.indir.par2"' in lines[7]
+    assert 'testdata/7z_example.dir.{{foobardir}}/rand.indir.7z.001" && del /q "/' in lines[7]

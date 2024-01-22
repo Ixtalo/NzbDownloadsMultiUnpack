@@ -5,13 +5,13 @@ the file/folder name, e.g. ".../foobar {{password}}/somearchive.rar".
 
 ## Requirements
 
-* Python 3.8+
-  * pipenv, install with `python3 -m pip install --update --user pipenv`
+* Python 3.10+
+* Poetry (see https://python-poetry.org/docs/#installation)
 
 
-## How-To Run
+## Usage
 
-1. `pipenv sync`
-2. `pipenv run python multiunpackrecursive.py <BASEDIR> > unpack_delete.sh`
+1. setup: `poetry install --only=main`
+2. `poetry run python multiunpackrecursive.py <BASEDIR> > unpack_delete.sh`
 3. check `unpack_delete.sh`
 4. `bash unpack_delete.sh`
